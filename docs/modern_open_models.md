@@ -17,6 +17,7 @@ python -m venv env
 source env/bin/activate
 pip install -U pip wheel
 pip install -r requirements-modern.txt
+pip install -e .
 python -c "import nltk; nltk.download('punkt')"
 ```
 

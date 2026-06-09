@@ -15,4 +15,3 @@ pyprg
 pytest
 pytest-mypy
 mypy
-.

@@ -18,7 +18,7 @@ authors = [
     {name="Luca Zappella", email="lzappella@apple.com"},
     {name="Nick Apostoloff",  email="napostoloff@apple.com"},
 ]
-license= {"file" = "LICENSE.txt"}
+license= {"file" = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.8"
 dynamic = ["version", "description"]  # Flit will fill these in for us
@@ -41,7 +41,7 @@ dependencies = [
     "matplotlib",
     "numpy",
     "scipy",
-    "sklearn",
+    "scikit-learn",
     "pandas",
     "tqdm",
     "transformers",
