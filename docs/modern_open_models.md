@@ -260,3 +260,27 @@ python scripts/generate_seq.py \
 
 This is only a smoke test. If it runs, do a controlled sweep over prompts,
 `num-units`, and AP-vs-GMM tables next.
+
+If generation becomes garbled, use a gentler intervention:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --forcing-alpha 0.25 \
+  --num-units 3 \
+  --only-last-token \
+  --device cuda \
+  --no-save
+```
+
+`--forcing-alpha 0.25` means: move each unit only 25% of the way from its
+negative average (`off_mean`) to the requested on value. `--only-last-token`
+also avoids overwriting every token position in the context.

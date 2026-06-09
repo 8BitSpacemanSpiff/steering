@@ -102,6 +102,15 @@ def argument_parser(prev_args: t.Optional[str] = None):
     )
     parser.add_argument("--forcing", type=str, nargs="*", default=["on_p50"], help="Forcing value.")
     parser.add_argument(
+        "--forcing-alpha",
+        type=float,
+        default=1.0,
+        help=(
+            "Interpolate forcing values from off_mean toward the requested forcing column. "
+            "1.0 uses the full forcing value; 0.25 applies a gentler intervention."
+        ),
+    )
+    parser.add_argument(
         "--num-units",
         type=int,
         default=[1],
@@ -162,6 +171,22 @@ def generate(args):
 
     expertise = pd.read_csv(args.expertise)
     concept = expertise["concept"].values[0]
+    if args.forcing_alpha != 1.0:
+        if "off_mean" not in expertise.columns:
+            raise RuntimeError("--forcing-alpha requires an off_mean column in the expertise CSV.")
+        adjusted_forcing_values = []
+        for forcing_value in args.forcing:
+            if forcing_value == "zero":
+                adjusted_forcing_values.append(forcing_value)
+                continue
+            if forcing_value not in expertise.columns:
+                raise RuntimeError(f"Forcing column not found: {forcing_value}")
+            adjusted_col = f"{forcing_value}_alpha_{args.forcing_alpha:g}"
+            expertise[adjusted_col] = expertise["off_mean"] + args.forcing_alpha * (
+                expertise[forcing_value] - expertise["off_mean"]
+            )
+            adjusted_forcing_values.append(adjusted_col)
+        args.forcing = adjusted_forcing_values
 
     # Load model and tokenizer. The readable model wraps a Hugging Face causal LM
     # and gives us the hooks needed for activation forcing.
