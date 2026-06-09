@@ -115,8 +115,9 @@ def argument_parser(prev_args: t.Optional[str] = None):
         choices=["set", "add"],
         default="set",
         help=(
-            "'set' replaces activations with the forcing value. 'add' adds a delta "
-            "toward the forcing value and is usually safer for modern models."
+            "'set' replaces activations with the forcing value, matching the original "
+            "self-conditioning steering method. 'add' adds a delta toward the forcing "
+            "value and is an experimental fallback."
         ),
     )
     parser.add_argument(

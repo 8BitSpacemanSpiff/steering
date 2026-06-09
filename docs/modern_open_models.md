@@ -281,7 +281,48 @@ python scripts/generate_seq.py \
 
 If this is garbled, do not interpret steering results yet.
 
-If generation becomes garbled, use a gentler intervention:
+Now that modern causal LM generation recomputes the full prefix each token,
+the primary steering path should use the original replacement-style hook. This
+sets each chosen activation to the requested expert value:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --num-units 3 \
+  --only-last-token \
+  --device cuda \
+  --no-save
+```
+
+Compare that against AP with the same replacement-style hook:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric ap \
+  --forcing on_p50 \
+  --num-units 3 \
+  --only-last-token \
+  --device cuda \
+  --no-save
+```
+
+If full replacement is too strong, keep the old replacement hook but use a
+smaller target:
 
 ```bash
 python scripts/generate_seq.py \
@@ -296,50 +337,19 @@ python scripts/generate_seq.py \
   --forcing on_mode_mean \
   --forcing-alpha 0.25 \
   --num-units 3 \
-  --only-last-token \
-  --device cuda \
-  --no-save
-```
-
-`--forcing-alpha 0.25` means: move each unit only 25% of the way from its
-negative average (`off_mean`) to the requested on value. `--only-last-token`
-also avoids overwriting every token position in the context.
-
-For Qwen, `gate_proj` interventions can still be harsh. Try a tiny one-unit
-additive intervention and skip the top unit:
-
-```bash
-python scripts/generate_seq.py \
-  --model-name-or-path "$MODEL_NAME" \
-  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
-  --length 40 \
-  --prompt "The team" \
-  --seed 0 5 \
-  --temperature 0.8 \
-  --top-p 0.9 \
-  --metric gmm_score \
-  --forcing on_mode_mean \
-  --intervention-mode add \
-  --forcing-alpha 0.02 \
-  --max-forcing-value 0.1 \
-  --num-units 1 \
   --top-n 2 \
   --only-last-token \
   --device cuda \
   --no-save
 ```
 
-You can also restrict forcing to a layer/type pattern:
+`--forcing-alpha 0.25` means: set the activation to a value 25% of the way
+from the unit's negative average (`off_mean`) to the requested on value. This
+is still replacement-style steering; it does not add a delta unless
+`--intervention-mode add` is explicitly passed.
+
+You can also restrict replacement steering to a layer/type pattern:
 
 ```bash
 --use-layers "up_proj"
 ```
-
-In additive mode, the value added is:
-
-```text
-forcing_alpha * (requested_on_value - off_mean)
-```
-
-So `--forcing-alpha 0.02 --max-forcing-value 0.1` means a very small nudge,
-not activation replacement.
