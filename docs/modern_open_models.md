@@ -206,3 +206,17 @@ python scripts/compute_gmm_expertise.py \
 The original AP `expertise.csv` is not modified. The new table includes
 `gmm_score`, `gmm_ap`, `gmm_auc`, `diff_mean`, `pos_k`, `neg_k`,
 `on_mode_mean`, component means, and the original AP/forcing columns.
+
+To create a generation-friendly expertise CSV containing both AP and GMM
+columns:
+
+```bash
+python scripts/merge_gmm_expertise.py \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_ap075_090.csv" \
+  --keep gmm \
+  --out-csv "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv"
+```
+
+Use `--metric gmm_score` and `--forcing on_mode_mean` with this merged table
+once generation support is ready.
