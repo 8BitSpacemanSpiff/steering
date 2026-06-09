@@ -103,3 +103,19 @@ This prints:
 - how often positive/negative responses choose 1, 2, or 3 modes;
 - the top candidate units by GMM;
 - units where `gmm_ap - ap` is largest.
+
+If the candidate comparison finds medium-AP units that GMM improves, scan that
+AP band more thoroughly:
+
+```bash
+python scripts/scan_gmm_band.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --min-ap 0.75 \
+  --max-ap 0.9 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_scan_ap075_090.csv"
+```
+
+This is still cheaper than fitting GMMs for every unit, but it targets the most
+interesting question: can GMM lift units that AP did not rank at the very top?
