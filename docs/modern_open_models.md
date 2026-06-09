@@ -220,3 +220,43 @@ python scripts/merge_gmm_expertise.py \
 
 Use `--metric gmm_score` and `--forcing on_mode_mean` with this merged table
 once generation support is ready.
+
+## Steering Smoke Test
+
+Compare AP-ranked forcing against GMM-ranked forcing with the same model and
+prompt:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric ap \
+  --forcing on_p50 \
+  --num-units 10 \
+  --device cuda \
+  --no-save
+```
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --num-units 10 \
+  --device cuda \
+  --no-save
+```
+
+This is only a smoke test. If it runs, do a controlled sweep over prompts,
+`num-units`, and AP-vs-GMM tables next.

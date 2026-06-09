@@ -32,7 +32,7 @@ import pandas as pd
 import torch
 import warnings
 from tqdm import tqdm
-from transformers import AutoModelWithLMHead, GPT2Tokenizer
+from transformers import AutoTokenizer
 
 from selfcond.generation import force_units_hooks, generate_sentence, set_seed
 from selfcond.models import PytorchTransformersModel
@@ -157,20 +157,17 @@ def generate(args):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = args.device
-    n_gpu = torch.cuda.device_count() if device is not "cpu" else 0
+    n_gpu = torch.cuda.device_count() if device != "cpu" else 0
     print(f"Device {device} ({n_gpu})")
 
     expertise = pd.read_csv(args.expertise)
     concept = expertise["concept"].values[0]
 
-    # Load model and tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
+    # Load model and tokenizer. The readable model wraps a Hugging Face causal LM
+    # and gives us the hooks needed for activation forcing.
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelWithLMHead.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
-    model.eval()
-    model.to(device)
-
     readable_model = PytorchTransformersModel(
         model_name=args.model_name_or_path,
         seq_len=128,
@@ -205,7 +202,7 @@ def generate(args):
                     # Set units to forcing value
                     mean_metric = 0
                     if num_units > 0:
-                        model, df_force = force_units_hooks(
+                        readable_model, df_force = force_units_hooks(
                             model=readable_model,
                             expertise=expertise,
                             value=forcing_value,
