@@ -237,6 +237,7 @@ def force_units_hooks(
     top_n: int = 1,
     use_layers: t.Union[str, t.List[str]] = None,
     only_last_token: bool = False,
+    intervention_mode: str = "set",
 ) -> t.Tuple[PytorchTransformersModel, pd.DataFrame]:
     """
     Force the top performing units in a model in terms of metric. We call such units top experts.
@@ -259,6 +260,8 @@ def force_units_hooks(
         use_layers: From which layers are units forced. If None, all layers are used.
         only_last_token: If set, only the responses related to the last token are forced.
             Otherwise, all tokens in the sequence are forced.
+        intervention_mode: If "set", replace activations with values. If "add", add values to
+            the existing activations.
 
     Returns:
         The forced PyTorch Module
@@ -302,6 +305,7 @@ def force_units_hooks(
             units=units_force,
             values=vals_force,
             only_last_token=only_last_token,
+            intervention_mode=intervention_mode,
         )
 
     return model, df

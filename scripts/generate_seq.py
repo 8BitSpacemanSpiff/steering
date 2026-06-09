@@ -111,6 +111,15 @@ def argument_parser(prev_args: t.Optional[str] = None):
         ),
     )
     parser.add_argument(
+        "--intervention-mode",
+        choices=["set", "add"],
+        default="set",
+        help=(
+            "'set' replaces activations with the forcing value. 'add' adds a delta "
+            "toward the forcing value and is usually safer for modern models."
+        ),
+    )
+    parser.add_argument(
         "--num-units",
         type=int,
         default=[1],
@@ -196,14 +205,22 @@ def generate(args):
                 continue
             if forcing_value not in expertise.columns:
                 raise RuntimeError(f"Forcing column not found: {forcing_value}")
-            adjusted_col = f"{forcing_value}_alpha_{args.forcing_alpha:g}"
-            expertise[adjusted_col] = expertise["off_mean"] + args.forcing_alpha * (
-                expertise[forcing_value] - expertise["off_mean"]
-            )
+            adjusted_col = f"{forcing_value}_{args.intervention_mode}_alpha_{args.forcing_alpha:g}"
+            delta = args.forcing_alpha * (expertise[forcing_value] - expertise["off_mean"])
+            if args.intervention_mode == "add":
+                expertise[adjusted_col] = delta
+            else:
+                expertise[adjusted_col] = expertise["off_mean"] + delta
             if args.max_forcing_value is not None:
-                expertise[adjusted_col] = expertise[adjusted_col].clip(
-                    upper=args.max_forcing_value
-                )
+                if args.intervention_mode == "add":
+                    expertise[adjusted_col] = expertise[adjusted_col].clip(
+                        lower=-args.max_forcing_value,
+                        upper=args.max_forcing_value,
+                    )
+                else:
+                    expertise[adjusted_col] = expertise[adjusted_col].clip(
+                        upper=args.max_forcing_value
+                    )
             adjusted_forcing_values.append(adjusted_col)
         args.forcing = adjusted_forcing_values
 
@@ -254,6 +271,7 @@ def generate(args):
                             top_n=top_n,
                             use_layers=force_layer,
                             only_last_token=args.only_last_token,
+                            intervention_mode=args.intervention_mode,
                         )
                         mean_metric = float(df_force[args.metric].mean())
 

@@ -169,17 +169,25 @@ class TorchModel:
         units: torch.Tensor,
         values: torch.Tensor,
         only_last_token: bool,
+        intervention_mode: str = "set",
     ) -> t.Callable:
         assert len(units) == len(values), "The number of values must match the number of units."
         assert units.dtype == torch.int64, "Unit indices must be int64."
         assert values.dtype == torch.float32, "Values must be float32."
+        assert intervention_mode in ["set", "add"], "intervention_mode must be 'set' or 'add'."
 
         def forward_hook(module, input, output):
             # Modify the output of the layer.
             if only_last_token:
-                output[:, -1, units] = values.to(output.device)
+                if intervention_mode == "add":
+                    output[:, -1, units] = output[:, -1, units] + values.to(output.device)
+                else:
+                    output[:, -1, units] = values.to(output.device)
             else:
-                output[:, :, units] = values.to(output.device)
+                if intervention_mode == "add":
+                    output[:, :, units] = output[:, :, units] + values.to(output.device)
+                else:
+                    output[:, :, units] = values.to(output.device)
             return output
 
         return forward_hook
@@ -190,6 +198,7 @@ class TorchModel:
         units: torch.Tensor,
         values: torch.Tensor,
         only_last_token: bool = False,
+        intervention_mode: str = "set",
     ) -> None:
         """
         Registers forward hooks that will set the indexed ``units`` in ``layer`` with the ``values`` passed.
@@ -208,6 +217,7 @@ class TorchModel:
                         units=units,
                         values=values,
                         only_last_token=only_last_token,
+                        intervention_mode=intervention_mode,
                     )
                 )
                 self._forward_hooks.append(handle)

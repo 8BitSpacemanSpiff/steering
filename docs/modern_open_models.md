@@ -286,7 +286,7 @@ negative average (`off_mean`) to the requested on value. `--only-last-token`
 also avoids overwriting every token position in the context.
 
 For Qwen, `gate_proj` interventions can still be harsh. Try a tiny one-unit
-intervention and skip the top unit:
+additive intervention and skip the top unit:
 
 ```bash
 python scripts/generate_seq.py \
@@ -299,8 +299,9 @@ python scripts/generate_seq.py \
   --top-p 0.9 \
   --metric gmm_score \
   --forcing on_mode_mean \
+  --intervention-mode add \
   --forcing-alpha 0.02 \
-  --max-forcing-value 1.5 \
+  --max-forcing-value 0.1 \
   --num-units 1 \
   --top-n 2 \
   --only-last-token \
@@ -313,3 +314,12 @@ You can also restrict forcing to a layer/type pattern:
 ```bash
 --use-layers "up_proj"
 ```
+
+In additive mode, the value added is:
+
+```text
+forcing_alpha * (requested_on_value - off_mean)
+```
+
+So `--forcing-alpha 0.02 --max-forcing-value 0.1` means a very small nudge,
+not activation replacement.
