@@ -284,3 +284,32 @@ python scripts/generate_seq.py \
 `--forcing-alpha 0.25` means: move each unit only 25% of the way from its
 negative average (`off_mean`) to the requested on value. `--only-last-token`
 also avoids overwriting every token position in the context.
+
+For Qwen, `gate_proj` interventions can still be harsh. Try a tiny one-unit
+intervention and skip the top unit:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --forcing-alpha 0.02 \
+  --max-forcing-value 1.5 \
+  --num-units 1 \
+  --top-n 2 \
+  --only-last-token \
+  --device cuda \
+  --no-save
+```
+
+You can also restrict forcing to a layer/type pattern:
+
+```bash
+--use-layers "up_proj"
+```

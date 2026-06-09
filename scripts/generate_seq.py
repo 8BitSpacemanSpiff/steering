@@ -138,6 +138,21 @@ def argument_parser(prev_args: t.Optional[str] = None):
         action="store_true",
         help="If set, force --num-units per layer at a time.",
     )
+    parser.add_argument(
+        "--use-layers",
+        type=str,
+        default=None,
+        help=(
+            "Regex/text pattern for layer names to include when forcing. Example: "
+            "'down_proj' or 'model.layers.0'."
+        ),
+    )
+    parser.add_argument(
+        "--max-forcing-value",
+        type=float,
+        default=None,
+        help="If set, clip generated forcing values to this maximum.",
+    )
 
     parser.add_argument("--eos", action="store_true", help="Trim the sentence if EOS is generated.")
     parser.add_argument("--verbose", action="store_true", help="Show more information")
@@ -185,6 +200,10 @@ def generate(args):
             expertise[adjusted_col] = expertise["off_mean"] + args.forcing_alpha * (
                 expertise[forcing_value] - expertise["off_mean"]
             )
+            if args.max_forcing_value is not None:
+                expertise[adjusted_col] = expertise[adjusted_col].clip(
+                    upper=args.max_forcing_value
+                )
             adjusted_forcing_values.append(adjusted_col)
         args.forcing = adjusted_forcing_values
 
@@ -200,13 +219,12 @@ def generate(args):
         device=device,
     )
 
-    layer_names = (
-        list(expertise.sort_values("layer").layer.unique())
-        if args.per_layer
-        else [
-            None,
-        ]
-    )
+    if args.per_layer:
+        layer_names = list(expertise.sort_values("layer").layer.unique())
+    elif args.use_layers:
+        layer_names = [args.use_layers]
+    else:
+        layer_names = [None]
     forcing_values = args.forcing
     generation_results = []
 
