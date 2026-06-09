@@ -148,3 +148,19 @@ python scripts/characterize_gmm_unit_modes.py \
 
 This prints simple statistics such as mode size, average activation, sentence
 length, digit rate, keyword rates, and top terms.
+
+To summarize several lifted units at once:
+
+```bash
+python scripts/summarize_gmm_scan_modes.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --concept-json assets/football/sense/football-1_04_00__.json \
+  --concept "$CONCEPT" \
+  --scan-csv "$CONCEPT_DIR/expertise/gmm_scan_ap075_090.csv" \
+  --sort-by gmm_ap \
+  --top-units 10 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_scan_top10_mode_summary.csv"
+```
+
+Use `--sort-by gmm_minus_ap` to focus on the units GMM most strongly lifts over
+AP.
