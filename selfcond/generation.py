@@ -74,7 +74,7 @@ def top_k_top_p_filtering(
 
 def decode_sentence(token_ids: t.Sequence[torch.Tensor], tokenizer: PreTrainedTokenizer) -> str:
     sentence = tokenizer.decode(
-        token_ids, clean_up_tokenization_spaces=True, skip_special_tokens=True
+        token_ids, clean_up_tokenization_spaces=False, skip_special_tokens=True
     )
     return sentence
 
@@ -92,27 +92,22 @@ def sample_sequence(
 ) -> torch.Tensor:
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
-    past = None
-    last_token = None
-    inputs["use_cache"] = True
     generated = inputs["input_ids"]
 
     with torch.no_grad():
         shown = 0
         for i in range(length):
-            # Using past_key_values to speed up inference
-            inputs["past_key_values"] = past
-            if last_token is not None:
-                inputs["input_ids"] = last_token.unsqueeze(0)
-                inputs["attention_mask"] = torch.ones_like(inputs["input_ids"], device=device)
-
-            # Run inference
-            outputs = model(**inputs)
-            past = outputs.past_key_values
+            # Recompute from the full generated prefix. This is slower than a KV cache
+            # but avoids GPT-2-era cache/mask assumptions that break modern causal LMs.
+            step_inputs = dict(inputs)
+            step_inputs["input_ids"] = generated
+            step_inputs["attention_mask"] = torch.ones_like(generated, device=device)
+            step_inputs["use_cache"] = False
+            outputs = model(**step_inputs)
             next_token_logits = outputs.logits[0, -1, :] / temperature
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
-            last_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
-            generated = torch.cat((generated, last_token.unsqueeze(0)), dim=1)
+            next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+            generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
 
             if i % 3 == 0 and tokenizer is not None and verbose:
                 out = generated[0, :].tolist()

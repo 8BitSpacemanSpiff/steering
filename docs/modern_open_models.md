@@ -261,6 +261,26 @@ python scripts/generate_seq.py \
 This is only a smoke test. If it runs, do a controlled sweep over prompts,
 `num-units`, and AP-vs-GMM tables next.
 
+First verify unforced generation is sane:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_ap075_090.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 5 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --num-units 0 \
+  --device cuda \
+  --no-save
+```
+
+If this is garbled, do not interpret steering results yet.
+
 If generation becomes garbled, use a gentler intervention:
 
 ```bash
