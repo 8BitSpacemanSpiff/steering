@@ -5,6 +5,36 @@
 
 This software project accompanies the paper [Self-Conditioning Pre-Trained Language Models](https://arxiv.org/abs/2110.02802). 
 
+## Modern Open-Model GMM Steering Branch
+
+This fork/branch also contains the current public-LLM GMM steering experiment.
+Start here if you are using Qwen/Mistral/Phi/Llama-style open causal LMs instead
+of the original GPT-2-only paper setup:
+
+[docs/modern_open_models.md](docs/modern_open_models.md)
+
+That runbook includes:
+
+- VM setup for `Qwen/Qwen2.5-0.5B`.
+- Exact AP baseline commands.
+- GMM expertise commands and output columns.
+- Mode inspection commands for terminal-only workflows.
+- Completed football experiment summaries.
+- Replacement-style steering commands.
+- AP-vs-GMM steering results so far.
+- Tomorrow's next experiment queue.
+
+Current short version:
+
+- Full top-AP steering is strong and remains the baseline.
+- GMM is class-conditional and uses labels; the difference from AP is
+  multimodal positive/negative activation modeling, not label-free fitting.
+- The best current evidence is that, within the mid-AP band
+  `0.75 <= AP < 0.9`, GMM selected units that steered more toward
+  football/sports than AP selected from the same candidate pool.
+- Do not overclaim every GMM mode as a clean subconcept; some modes are
+  confounds or artifacts.
+
 ## Installation
 
 The requirements are listed in [frozen_requirements.txt](frozen_requirements.txt). The code has been tested using `Python 3.8` on MacOS and Linux Ubuntu 18.04. Run the following for installation:
