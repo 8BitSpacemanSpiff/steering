@@ -164,3 +164,17 @@ python scripts/summarize_gmm_scan_modes.py \
 
 Use `--sort-by gmm_minus_ap` to focus on the units GMM most strongly lifts over
 AP.
+
+To aggregate a mode-summary CSV into evidence categories:
+
+```bash
+python scripts/summarize_mode_evidence.py \
+  --mode-summary-csv "$CONCEPT_DIR/expertise/gmm_scan_top10_mode_summary.csv"
+
+python scripts/summarize_mode_evidence.py \
+  --mode-summary-csv "$CONCEPT_DIR/expertise/gmm_scan_top10_lift_mode_summary.csv"
+```
+
+This is a crude keyword-based pass, but it is useful for terminal-only triage:
+it surfaces negative sports-confound modes, positive governance/history modes,
+positive match/action modes, and possible artifact-heavy modes.
