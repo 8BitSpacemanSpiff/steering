@@ -12,7 +12,7 @@ import torch
 from torch import nn
 from torch.utils.hooks import RemovableHandle
 from dataclasses import dataclass
-from transformers import AutoModelForPreTraining, AutoConfig
+from transformers import AutoConfig, AutoModelForCausalLM
 
 
 MODEL_INPUT_FIELDS = ["input_ids", "attention_mask"]
@@ -321,22 +321,31 @@ def transformers_model_name_to_family(model_name: str) -> str:
         str: The family name
 
     """
-    if model_name.startswith("bert"):
+    normalized_name = model_name.lower().split("/")[-1]
+    if normalized_name.startswith("bert"):
         return "bert"
-    elif model_name.startswith("openai"):
+    elif normalized_name.startswith("openai"):
         return "openai"
-    elif model_name.startswith("gpt2"):
+    elif normalized_name.startswith("gpt2"):
         return "gpt2"
-    elif model_name.startswith("xlnet"):
+    elif normalized_name.startswith("xlnet"):
         return "xlnet"
-    elif model_name.startswith("xlm"):
+    elif normalized_name.startswith("xlm"):
         return "xlm"
-    elif model_name.startswith("roberta"):
+    elif normalized_name.startswith("roberta"):
         return "roberta"
-    elif model_name.startswith("distilbert"):
+    elif normalized_name.startswith("distilbert"):
         return "distilbert"
-    elif model_name.startswith("ctrl"):
+    elif normalized_name.startswith("ctrl"):
         return "ctrl"
+    elif normalized_name.startswith("qwen"):
+        return "qwen"
+    elif normalized_name.startswith("mistral"):
+        return "mistral"
+    elif normalized_name.startswith("phi"):
+        return "phi"
+    elif normalized_name.startswith("llama"):
+        return "llama"
     else:
         raise NotImplementedError(f"Model name to type not considered: {model_name}")
 
@@ -359,9 +368,9 @@ def transformers_class_from_name(
     try:
         if rand_weights:
             config = AutoConfig.from_pretrained(model_name)
-            m = AutoModelForPreTraining.from_config(config)
+            m = AutoModelForCausalLM.from_config(config)
         else:
-            m = AutoModelForPreTraining.from_pretrained(model_name, cache_dir=cache_dir)
+            m = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
     except OSError:
         raise NotImplementedError(f"Model {model_name} could not be loaded.")
     assert m is not None
@@ -392,6 +401,12 @@ def get_layer_regex(model_name: str) -> t.Optional[t.List[str]]:
             "transformer.h.([0-9]|[0-9][0-9]).mlp.c_fc",
             "transformer.h.([0-9]|[0-9][0-9]).mlp.c_proj",
         ]
+    elif family in ["qwen", "mistral", "phi", "llama"]:
+        layer_types = [
+            "model.layers.([0-9]|[0-9][0-9]).mlp.gate_proj",
+            "model.layers.([0-9]|[0-9][0-9]).mlp.up_proj",
+            "model.layers.([0-9]|[0-9][0-9]).mlp.down_proj",
+        ]
     # Extend to other model families here if needed
     return layer_types
 
@@ -404,6 +419,14 @@ def _print_responses(ri: t.List[ResponseInfo]) -> None:
 
 
 def _collect_responses_info_for_model(model: TorchModel, model_family: str) -> t.List[ResponseInfo]:
+    decoder_mlp_response_infos = [
+        ri
+        for ri in model.get_response_infos()
+        if ri.layer.kind == "Linear"
+        and len(ri.shape) in [2, 3]
+        and "lm_head" not in ri.name
+        and ".mlp." in ri.name
+    ]
     mapping = {
         "gpt2": [
             ri
@@ -412,7 +435,10 @@ def _collect_responses_info_for_model(model: TorchModel, model_family: str) -> t
             and len(ri.shape) in [2, 3]
             and "lm_head" not in ri.name
         ],
-        # Extend to other models here
+        "qwen": decoder_mlp_response_infos,
+        "mistral": decoder_mlp_response_infos,
+        "phi": decoder_mlp_response_infos,
+        "llama": decoder_mlp_response_infos,
     }
     return mapping[model_family]
 
