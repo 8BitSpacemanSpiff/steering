@@ -84,6 +84,35 @@ def _tokens(text: str) -> t.List[str]:
     ]
 
 
+def _distinctive_terms(
+    token_counts_by_mode: t.Mapping[int, collections.Counter],
+    mode: int,
+    top_terms: int,
+    min_count: int = 3,
+) -> str:
+    mode_counts = token_counts_by_mode[mode]
+    other_counts = collections.Counter()
+    for other_mode, counts in token_counts_by_mode.items():
+        if other_mode != mode:
+            other_counts.update(counts)
+
+    mode_total = sum(mode_counts.values())
+    other_total = sum(other_counts.values())
+    vocab = set(mode_counts) | set(other_counts)
+    scored = []
+    for term in vocab:
+        count = mode_counts[term]
+        if count < min_count:
+            continue
+        # Smoothed frequency ratio: larger means more specific to this mode.
+        mode_freq = (count + 1.0) / (mode_total + len(vocab))
+        other_freq = (other_counts[term] + 1.0) / (other_total + len(vocab))
+        scored.append((mode_freq / other_freq, term, count))
+
+    scored.sort(reverse=True)
+    return ", ".join(f"{term}:{count}({ratio:.2f}x)" for ratio, term, count in scored[:top_terms])
+
+
 def _mode_summary(
     mode_name: str,
     mode_ids: np.ndarray,
@@ -95,13 +124,22 @@ def _mode_summary(
 ) -> None:
     print()
     print(mode_name)
+    token_counts_by_mode = {}
+    text_by_mode = {}
     for mode in sorted(np.unique(mode_ids)):
         selected = np.where(mode_ids == mode)[0]
         selected_global = global_indices[selected]
         text = [sentences[int(i)] for i in selected_global]
+        text_by_mode[int(mode)] = text
         token_counts = collections.Counter()
         for sentence in text:
             token_counts.update(_tokens(sentence))
+        token_counts_by_mode[int(mode)] = token_counts
+
+    for mode in sorted(np.unique(mode_ids)):
+        selected = np.where(mode_ids == mode)[0]
+        text = text_by_mode[int(mode)]
+        token_counts = token_counts_by_mode[int(mode)]
         lengths = np.asarray([len(sentence.split()) for sentence in text], dtype=float)
         digit_rate = float(np.mean([bool(re.search(r"\d", sentence)) for sentence in text]))
         football_rate = float(np.mean(["football" in sentence.lower() for sentence in text]))
@@ -121,6 +159,10 @@ def _mode_summary(
         print(f"  rugby_rate: {rugby_rate:.3f}")
         print(f"  soccer_rate: {soccer_rate:.3f}")
         print(f"  top_terms: {terms}")
+        print(
+            "  distinctive_terms: "
+            + _distinctive_terms(token_counts_by_mode, int(mode), top_terms=top_terms)
+        )
 
 
 def main() -> None:
