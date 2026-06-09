@@ -83,3 +83,23 @@ The important columns are:
   scale.
 - `on_mode_mean`: highest positive-mode mean, which is the candidate steering
   value for later.
+
+For a rough early AP-vs-GMM comparison, sample candidate units across AP ranges:
+
+```bash
+python scripts/compare_gmm_candidates.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --top-n 100 \
+  --random-n 100 \
+  --per-bin 50 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_candidate_compare.csv"
+```
+
+This prints:
+
+- correlations between `ap`, `diff_mean`, and `gmm_ap`;
+- how often positive/negative responses choose 1, 2, or 3 modes;
+- the top candidate units by GMM;
+- units where `gmm_ap - ap` is largest.
