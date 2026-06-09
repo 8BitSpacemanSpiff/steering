@@ -134,3 +134,17 @@ python scripts/inspect_gmm_unit.py \
 Start with units from `gmm_scan_ap075_090.csv` where `gmm_minus_ap` is large and
 `gmm_ap` is high. The output is not proof of sub-concepts yet; it is the first
 human-readable check for whether modes look meaningful or like artifacts.
+
+For a more compact terminal summary of each mode:
+
+```bash
+python scripts/characterize_gmm_unit_modes.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --concept-json assets/football/sense/football-1_04_00__.json \
+  --concept "$CONCEPT" \
+  --layer "model.layers.16.mlp.gate_proj:0" \
+  --unit 4039
+```
+
+This prints simple statistics such as mode size, average activation, sentence
+length, digit rate, keyword rates, and top terms.
