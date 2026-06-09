@@ -178,3 +178,31 @@ python scripts/summarize_mode_evidence.py \
 This is a crude keyword-based pass, but it is useful for terminal-only triage:
 it surfaces negative sports-confound modes, positive governance/history modes,
 positive match/action modes, and possible artifact-heavy modes.
+
+## GMM Expertise Table
+
+Once the probes look useful, write GMM scores to a separate experiment-side CSV:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --min-ap 0.75 \
+  --max-ap 0.9 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_ap075_090.csv"
+```
+
+For a full all-unit run, omit `--min-ap` and `--max-ap`. This can be slow:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv"
+```
+
+The original AP `expertise.csv` is not modified. The new table includes
+`gmm_score`, `gmm_ap`, `gmm_auc`, `diff_mean`, `pos_k`, `neg_k`,
+`on_mode_mean`, component means, and the original AP/forcing columns.
