@@ -533,26 +533,41 @@ inventory and contains `layer`, `unit`, `on_p50`, `on_p90`, and `off_mean`.
 However, if you omit `--min-ap` and `--max-ap`, no AP threshold is used for
 selection. The final ranking is pure GMM when you sort by `gmm_score`.
 
-First, run a smaller all-layer pilot if you want a time estimate:
+First, check how many CPU cores the VM exposes:
 
 ```bash
+nproc
+```
+
+The H100 helps response collection and generation, but GMM fitting is mostly
+CPU work. More CPU workers matter here.
+
+Run a smaller all-layer pilot if you want a time estimate:
+
+```bash
+CORES=$(nproc)
+
 python scripts/compute_gmm_expertise.py \
   --responses-dir "$CONCEPT_DIR/responses" \
   --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
   --concept "$CONCEPT" \
   --max-units 5000 \
-  --cpus 8 \
+  --cpus "$CORES" \
+  --chunksize 128 \
   --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all_sample5000.csv"
 ```
 
-Then run the full all-neuron GMM fit. This is the overnight-style run:
+Then run the full all-neuron GMM fit with all available CPU workers:
 
 ```bash
+CORES=$(nproc)
+
 python scripts/compute_gmm_expertise.py \
   --responses-dir "$CONCEPT_DIR/responses" \
   --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
   --concept "$CONCEPT" \
-  --cpus 8 \
+  --cpus "$CORES" \
+  --chunksize 128 \
   --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv"
 ```
 
@@ -561,6 +576,53 @@ Expected scale for Qwen 0.5B football:
 ```text
 254976 units
 ```
+
+If one giant process is awkward, split the all-neuron run into shards. This
+example runs 8 shards in parallel with 8 workers each, so it uses about 64 CPU
+workers total:
+
+Prefer the single-process `--cpus "$CORES"` command first. Parallel shards can
+be faster, but each shard process loads the cached responses, so it uses more
+RAM.
+
+```bash
+mkdir -p "$CONCEPT_DIR/expertise/gmm_shards"
+
+for SHARD in 0 1 2 3 4 5 6 7; do
+  python scripts/compute_gmm_expertise.py \
+    --responses-dir "$CONCEPT_DIR/responses" \
+    --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+    --concept "$CONCEPT" \
+    --num-shards 8 \
+    --shard-index "$SHARD" \
+    --cpus 8 \
+    --chunksize 128 \
+    --out-csv "$CONCEPT_DIR/expertise/gmm_shards/gmm_expertise_all_shard${SHARD}.csv" \
+    > "$CONCEPT_DIR/expertise/gmm_shards/shard${SHARD}.log" 2>&1 &
+done
+
+wait
+```
+
+Merge the shards:
+
+```bash
+python scripts/merge_gmm_expertise_shards.py \
+  --shard-glob "$CONCEPT_DIR/expertise/gmm_shards/gmm_expertise_all_shard*.csv" \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv"
+```
+
+If the VM has fewer CPU cores, reduce either the number of shards, `--cpus`, or
+both. The product `num_parallel_shards * cpus_per_shard` should be near, but not
+wildly above, `nproc`.
+
+For a faster but less stable exploratory pass, add:
+
+```bash
+--n-init 1
+```
+
+Use the default `--n-init 3` for the table you plan to compare seriously.
 
 After the full table finishes, print the top pure-GMM neurons:
 

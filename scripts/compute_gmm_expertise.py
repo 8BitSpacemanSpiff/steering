@@ -94,6 +94,17 @@ def _select_units(
     return selected.reset_index(drop=True)
 
 
+def _apply_shard(selected: pd.DataFrame, num_shards: int, shard_index: int) -> pd.DataFrame:
+    if num_shards <= 1:
+        return selected
+    if shard_index < 0 or shard_index >= num_shards:
+        raise RuntimeError(
+            f"--shard-index must be in [0, {num_shards - 1}], got {shard_index}."
+        )
+    row_ids = np.arange(len(selected))
+    return selected[row_ids % num_shards == shard_index].reset_index(drop=True)
+
+
 def _score_rows(
     rows,
     responses,
@@ -103,9 +114,11 @@ def _score_rows(
     n_init,
     random_state,
     cpus,
+    chunksize,
 ) -> pd.DataFrame:
-    worker_count = min(cpu_count() - 1, 8) if cpus is None else cpus
+    worker_count = min(max(cpu_count() - 1, 1), 32) if cpus is None else cpus
     worker_count = max(1, worker_count)
+    chunksize = max(1, chunksize)
     score_fn = partial(
         _score_row,
         k_values=k_values,
@@ -127,7 +140,7 @@ def _score_rows(
         ) as pool:
             scored = list(
                 tqdm(
-                    pool.imap(score_fn, rows, chunksize=16),
+                    pool.imap(score_fn, rows, chunksize=chunksize),
                     total=len(rows),
                     desc=f"GMM scoring units [{worker_count} workers]",
                 )
@@ -135,12 +148,20 @@ def _score_rows(
     return pd.DataFrame(scored)
 
 
-def _print_summary(out: pd.DataFrame, min_ap: float, max_ap: float) -> None:
+def _print_summary(
+    out: pd.DataFrame,
+    min_ap: float,
+    max_ap: float,
+    num_shards: int,
+    shard_index: int,
+) -> None:
     print("rows:", len(out))
     if min_ap is None and max_ap is None:
         print("ap filter: none")
     else:
         print("ap filter:", min_ap, "<= ap <", max_ap)
+    if num_shards > 1:
+        print("shard:", shard_index, "of", num_shards)
     print()
     print("correlations:")
     print(out[["ap", "diff_mean", "gmm_ap", "gmm_auc"]].corr().to_string())
@@ -187,9 +208,43 @@ def main() -> None:
     parser.add_argument("--max-units", type=int, default=0)
     parser.add_argument("--k-values", type=str, default="1,2,3")
     parser.add_argument("--reg-covar", type=float, default=1e-4)
-    parser.add_argument("--n-init", type=int, default=3)
+    parser.add_argument(
+        "--n-init",
+        type=int,
+        default=3,
+        help=(
+            "Number of sklearn GMM initializations per k. Lower is faster; "
+            "higher is more stable."
+        ),
+    )
     parser.add_argument("--random-state", type=int, default=0)
-    parser.add_argument("--cpus", type=int, default=None)
+    parser.add_argument(
+        "--cpus",
+        type=int,
+        default=None,
+        help=(
+            "Number of multiprocessing workers. Default uses up to 32 CPU cores; "
+            "pass $(nproc) on a large VM to use all cores."
+        ),
+    )
+    parser.add_argument(
+        "--chunksize",
+        type=int,
+        default=64,
+        help="Rows per multiprocessing task. Larger values reduce scheduling overhead.",
+    )
+    parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=1,
+        help="Split selected units into this many deterministic shards.",
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help="Which shard to score, zero-indexed.",
+    )
     parser.add_argument("--out-csv", type=pathlib.Path, required=True)
     args = parser.parse_args()
 
@@ -206,8 +261,16 @@ def main() -> None:
         max_units=args.max_units,
         random_state=args.random_state,
     )
+    selected = _apply_shard(
+        selected=selected,
+        num_shards=args.num_shards,
+        shard_index=args.shard_index,
+    )
     if selected.empty:
         raise RuntimeError("No units selected for GMM scoring.")
+    print("selected units:", len(selected))
+    if args.num_shards > 1:
+        print("selected shard:", args.shard_index, "of", args.num_shards)
 
     out = _score_rows(
         rows=selected.to_dict(orient="records"),
@@ -218,6 +281,7 @@ def main() -> None:
         n_init=args.n_init,
         random_state=args.random_state,
         cpus=args.cpus,
+        chunksize=args.chunksize,
     )
     out["rank_ap"] = out["ap"].rank(ascending=False, method="min")
     out["rank_gmm"] = out["gmm_ap"].rank(ascending=False, method="min")
@@ -226,7 +290,7 @@ def main() -> None:
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(args.out_csv, index=False)
     print("saved:", args.out_csv)
-    _print_summary(out, args.min_ap, args.max_ap)
+    _print_summary(out, args.min_ap, args.max_ap, args.num_shards, args.shard_index)
 
 
 if __name__ == "__main__":
