@@ -14,6 +14,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from selfcond.gmm import class_conditional_gmm_score
+from selfcond.gmm_torch import score_layer_units_torch_gpu
 from selfcond.responses import read_responses_from_cached
 
 
@@ -148,6 +149,39 @@ def _score_rows(
     return pd.DataFrame(scored)
 
 
+def _score_rows_torch_gpu(
+    rows,
+    responses,
+    labels,
+    k_values,
+    reg_covar,
+    n_init,
+    batch_size,
+    max_iter,
+    tol,
+    device,
+) -> pd.DataFrame:
+    scored = []
+    rows_df = pd.DataFrame(rows)
+    for layer, layer_df in rows_df.groupby("layer", sort=True):
+        print(f"GPU scoring layer: {layer} rows={len(layer_df)}")
+        scored.extend(
+            score_layer_units_torch_gpu(
+                layer_responses=responses[layer],
+                layer_rows=layer_df.to_dict(orient="records"),
+                labels=labels,
+                k_values=k_values,
+                reg_covar=reg_covar,
+                n_init=n_init,
+                batch_size=batch_size,
+                max_iter=max_iter,
+                tol=tol,
+                device=device,
+            )
+        )
+    return pd.DataFrame(scored)
+
+
 def _print_summary(
     out: pd.DataFrame,
     min_ap: float,
@@ -209,6 +243,12 @@ def main() -> None:
     parser.add_argument("--k-values", type=str, default="1,2,3")
     parser.add_argument("--reg-covar", type=float, default=1e-4)
     parser.add_argument(
+        "--backend",
+        choices=["sklearn-cpu", "torch-gpu"],
+        default="sklearn-cpu",
+        help="GMM fitting backend. Use torch-gpu on CUDA machines for all-neuron runs.",
+    )
+    parser.add_argument(
         "--n-init",
         type=int,
         default=3,
@@ -231,7 +271,34 @@ def main() -> None:
         "--chunksize",
         type=int,
         default=64,
-        help="Rows per multiprocessing task. Larger values reduce scheduling overhead.",
+        help=(
+            "Rows per multiprocessing task for sklearn-cpu. Larger values reduce "
+            "CPU scheduling overhead."
+        ),
+    )
+    parser.add_argument(
+        "--gpu-batch-size",
+        type=int,
+        default=2048,
+        help="Units per CUDA batch for --backend torch-gpu.",
+    )
+    parser.add_argument(
+        "--gpu-max-iter",
+        type=int,
+        default=50,
+        help="Maximum EM iterations per k/init for --backend torch-gpu.",
+    )
+    parser.add_argument(
+        "--gpu-tol",
+        type=float,
+        default=1e-3,
+        help="EM log-likelihood tolerance for --backend torch-gpu.",
+    )
+    parser.add_argument(
+        "--gpu-device",
+        type=str,
+        default="cuda",
+        help="Torch device for --backend torch-gpu.",
     )
     parser.add_argument(
         "--num-shards",
@@ -272,17 +339,32 @@ def main() -> None:
     if args.num_shards > 1:
         print("selected shard:", args.shard_index, "of", args.num_shards)
 
-    out = _score_rows(
-        rows=selected.to_dict(orient="records"),
-        responses=responses,
-        labels=labels,
-        k_values=_parse_k_values(args.k_values),
-        reg_covar=args.reg_covar,
-        n_init=args.n_init,
-        random_state=args.random_state,
-        cpus=args.cpus,
-        chunksize=args.chunksize,
-    )
+    rows = selected.to_dict(orient="records")
+    if args.backend == "torch-gpu":
+        out = _score_rows_torch_gpu(
+            rows=rows,
+            responses=responses,
+            labels=labels,
+            k_values=_parse_k_values(args.k_values),
+            reg_covar=args.reg_covar,
+            n_init=args.n_init,
+            batch_size=args.gpu_batch_size,
+            max_iter=args.gpu_max_iter,
+            tol=args.gpu_tol,
+            device=args.gpu_device,
+        )
+    else:
+        out = _score_rows(
+            rows=rows,
+            responses=responses,
+            labels=labels,
+            k_values=_parse_k_values(args.k_values),
+            reg_covar=args.reg_covar,
+            n_init=args.n_init,
+            random_state=args.random_state,
+            cpus=args.cpus,
+            chunksize=args.chunksize,
+        )
     out["rank_ap"] = out["ap"].rank(ascending=False, method="min")
     out["rank_gmm"] = out["gmm_ap"].rank(ascending=False, method="min")
     out["rank_diff_mean"] = out["diff_mean"].rank(ascending=False, method="min")

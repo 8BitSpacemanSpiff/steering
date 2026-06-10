@@ -542,6 +542,81 @@ nproc
 The H100 helps response collection and generation, but GMM fitting is mostly
 CPU work. More CPU workers matter here.
 
+### GPU Backend On A100/H100
+
+This branch also has an experimental PyTorch CUDA backend for the 1D GMM fit.
+It does not use sklearn's CPU `GaussianMixture`; it fits batches of units on the
+GPU and writes the same CSV columns.
+
+First compare CPU and GPU on a small sample:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --max-units 2000 \
+  --backend sklearn-cpu \
+  --cpus "$(nproc)" \
+  --chunksize 128 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_cpu_sample2000.csv"
+
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --max-units 2000 \
+  --backend torch-gpu \
+  --gpu-device cuda \
+  --gpu-batch-size 2048 \
+  --gpu-max-iter 50 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_gpu_sample2000.csv"
+```
+
+Then compare the top rows:
+
+```bash
+python scripts/select_top_gmm_units.py \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_gpu_sample2000.csv" \
+  --sort-by gmm_score \
+  --top-n 30
+
+python scripts/compare_gmm_tables.py \
+  --left-csv "$CONCEPT_DIR/expertise/gmm_expertise_cpu_sample2000.csv" \
+  --right-csv "$CONCEPT_DIR/expertise/gmm_expertise_gpu_sample2000.csv" \
+  --left-name cpu \
+  --right-name gpu \
+  --top-n 50
+```
+
+If the sample looks reasonable, run the full GPU all-neuron fit:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --backend torch-gpu \
+  --gpu-device cuda \
+  --gpu-batch-size 4096 \
+  --gpu-max-iter 50 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all_gpu.csv"
+```
+
+If CUDA runs out of memory, lower `--gpu-batch-size` to `2048`, `1024`, or
+`512`. For a faster exploratory pass, use `--n-init 1`; for serious comparison,
+keep the default `--n-init 3`.
+
+After the GPU full run, either use the GPU CSV directly with
+`select_top_gmm_units.py`, or copy/rename it to the standard all-GMM filename:
+
+```bash
+cp "$CONCEPT_DIR/expertise/gmm_expertise_all_gpu.csv" \
+   "$CONCEPT_DIR/expertise/gmm_expertise_all.csv"
+```
+
+### CPU Backend
+
 Run a smaller all-layer pilot if you want a time estimate:
 
 ```bash

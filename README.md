@@ -21,6 +21,7 @@ That runbook includes:
 - Mode inspection commands for terminal-only workflows.
 - Completed football experiment summaries.
 - All-neuron GMM fitting without AP prefiltering.
+- Experimental PyTorch CUDA backend for batched 1D GMM fitting on A100/H100.
 - Parallel/sharded all-neuron GMM commands for larger VM runs.
 - Pure-GMM top-neuron selection.
 - Replacement-style steering commands.
