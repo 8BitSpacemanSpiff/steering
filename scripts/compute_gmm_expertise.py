@@ -137,7 +137,10 @@ def _score_rows(
 
 def _print_summary(out: pd.DataFrame, min_ap: float, max_ap: float) -> None:
     print("rows:", len(out))
-    print("ap filter:", min_ap, "<= ap <", max_ap)
+    if min_ap is None and max_ap is None:
+        print("ap filter: none")
+    else:
+        print("ap filter:", min_ap, "<= ap <", max_ap)
     print()
     print("correlations:")
     print(out[["ap", "diff_mean", "gmm_ap", "gmm_auc"]].corr().to_string())

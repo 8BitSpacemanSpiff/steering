@@ -522,6 +522,130 @@ AP 0.894205  GMM 0.953253  model.layers.0.mlp.gate_proj:0   unit 2216
 AP 0.896687  GMM 0.952699  model.layers.20.mlp.gate_proj:0  unit 2426
 ```
 
+## Step 7b: Fit GMM On All Neurons
+
+The mid-AP band was useful for fast iteration, but it still depends on AP as a
+prefilter. To select neurons without depending on AP ranking, fit GMMs for every
+unit and rank only by `gmm_score`.
+
+The script still reads `expertise.csv` because that file is the convenient unit
+inventory and contains `layer`, `unit`, `on_p50`, `on_p90`, and `off_mean`.
+However, if you omit `--min-ap` and `--max-ap`, no AP threshold is used for
+selection. The final ranking is pure GMM when you sort by `gmm_score`.
+
+First, run a smaller all-layer pilot if you want a time estimate:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --max-units 5000 \
+  --cpus 8 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all_sample5000.csv"
+```
+
+Then run the full all-neuron GMM fit. This is the overnight-style run:
+
+```bash
+python scripts/compute_gmm_expertise.py \
+  --responses-dir "$CONCEPT_DIR/responses" \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --concept "$CONCEPT" \
+  --cpus 8 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv"
+```
+
+Expected scale for Qwen 0.5B football:
+
+```text
+254976 units
+```
+
+After the full table finishes, print the top pure-GMM neurons:
+
+```bash
+python scripts/select_top_gmm_units.py \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv" \
+  --sort-by gmm_score \
+  --top-n 50
+```
+
+Save the top pure-GMM neurons:
+
+```bash
+python scripts/select_top_gmm_units.py \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv" \
+  --sort-by gmm_score \
+  --top-n 200 \
+  --out-csv "$CONCEPT_DIR/expertise/gmm_top200_all.csv"
+```
+
+If you specifically want multimodal positive experts:
+
+```bash
+python scripts/select_top_gmm_units.py \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv" \
+  --sort-by gmm_score \
+  --min-pos-k 2 \
+  --top-n 50
+```
+
+If you want to focus on units where GMM most disagrees with AP, sort by lift:
+
+```bash
+python scripts/select_top_gmm_units.py \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv" \
+  --sort-by gmm_minus_ap \
+  --top-n 50
+```
+
+Merge the all-neuron GMM table for generation:
+
+```bash
+python scripts/merge_gmm_expertise.py \
+  --expertise-csv "$CONCEPT_DIR/expertise/expertise.csv" \
+  --gmm-csv "$CONCEPT_DIR/expertise/gmm_expertise_all.csv" \
+  --keep gmm \
+  --out-csv "$CONCEPT_DIR/expertise/expertise_with_gmm_all.csv"
+```
+
+Then steer from the all-neuron pure-GMM ranking:
+
+```bash
+python scripts/generate_seq.py \
+  --model-name-or-path "$MODEL_NAME" \
+  --expertise "$CONCEPT_DIR/expertise/expertise_with_gmm_all.csv" \
+  --length 40 \
+  --prompt "The team" \
+  --seed 0 10 \
+  --temperature 0.8 \
+  --top-p 0.9 \
+  --metric gmm_score \
+  --forcing on_mode_mean \
+  --num-units 3 5 10 \
+  --only-last-token \
+  --device cuda \
+  --no-save
+```
+
+Important comparisons after this run:
+
+```text
+1. Full AP top units:
+   expertise.csv, metric ap, forcing on_p50
+
+2. Full GMM top units:
+   expertise_with_gmm_all.csv, metric gmm_score, forcing on_mode_mean
+
+3. GMM-lift units:
+   gmm_expertise_all.csv sorted by gmm_minus_ap, then inspect/steer selected units
+```
+
+Do not judge the all-neuron result only by whether top GMM beats top AP. Also
+check whether the top GMM list contains units with lower AP but meaningful modes
+or better steering at the same number of units.
+
 ## Step 8: Verify Generation Is Sane Before Steering
 
 This is mandatory. If unforced generation is broken, steering results are not
@@ -895,4 +1019,3 @@ A careful framing:
    candidate pool.
 7. The next experiment should test whether that result survives more seeds,
    more `num_units`, and more prompts.
-

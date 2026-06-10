@@ -20,6 +20,8 @@ That runbook includes:
 - GMM expertise commands and output columns.
 - Mode inspection commands for terminal-only workflows.
 - Completed football experiment summaries.
+- All-neuron GMM fitting without AP prefiltering.
+- Pure-GMM top-neuron selection.
 - Replacement-style steering commands.
 - AP-vs-GMM steering results so far.
 - Tomorrow's next experiment queue.
